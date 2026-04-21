@@ -1,0 +1,1 @@
+Chứa script tiện ích.
