@@ -1,11 +1,38 @@
-__pycache__/
-*.pyc
-.venv/
-venv/
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# Node
 node_modules/
 dist/
-build/
+.vite/
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+env/
 .env
-.DS_Store
-.ipynb_checkpoints/
-data/processed/*
+
+# Database (Tùy chọn: Nếu bạn muốn team xài chung cục DB có sẵn thì KHÔNG thêm dòng dưới, còn nếu muốn họ tự tạo DB mới thì thêm vào)
+# *.db
