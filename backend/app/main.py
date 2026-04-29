@@ -1,27 +1,52 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import chat
-from app.api import auth  # Import router auth
-from app.db.session import engine, Base
+from sqlalchemy.orm import Session
+from app.api import chat, auth
+from app.db.session import engine, Base, SessionLocal
+from app.models.user import User
+from app.core.security import get_password_hash
+from app.api import chat, auth, major
 
-# Tự động tạo các bảng trong database (nếu chưa có)
+# Tạo bảng DB
 Base.metadata.create_all(bind=engine)
 
-# 1. KHỞI TẠO APP TRƯỚC (Rất quan trọng, phải nằm trên cùng)
 app = FastAPI(title="UIT Admission Chatbot API")
 
-# 2. CẤU HÌNH CORS
+# Cấu hình CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173", 
+        "*" # (Dấu * nghĩa là cho phép mọi trang web gọi API. Tạm thời dùng cái này để lúc deploy lên Github Pages không bị lỗi CORS chặn lại)
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 3. ĐĂNG KÝ ROUTER (Dùng biến 'app' sau khi nó đã được tạo ở trên)
+# --- DATABASE SEEDING (TẠO ADMIN MẶC ĐỊNH) ---
+@app.on_event("startup")
+def create_default_admin():
+    db: Session = SessionLocal()
+    admin_email = "admin@uit.edu.vn"
+    admin_exists = db.query(User).filter(User.email == admin_email).first()
+    
+    if not admin_exists:
+        admin_user = User(
+            name="Admin",
+            email=admin_email,
+            hashed_password=get_password_hash("admin123456"), # Mật khẩu khởi tạo
+            role="admin"
+        )
+        db.add(admin_user)
+        db.commit()
+    db.close()
+# --------------------------------------------
+
+# Đăng ký Routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
+app.include_router(major.router, prefix="/api/v1/majors", tags=["majors"])
 
 @app.get("/")
 def read_root():

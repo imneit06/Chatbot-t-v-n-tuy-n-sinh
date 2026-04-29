@@ -1,10 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  optimizeDeps: {
-    include: ['react/jsx-runtime', 'framer-motion']
-  }
+  base: '/Chatbot_for_admissions/', // BẮT BUỘC THÊM DÒNG NÀY ĐỂ GITHUB PAGES NHẬN DIỆN
 })

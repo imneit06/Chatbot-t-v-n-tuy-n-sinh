@@ -147,3 +147,32 @@ uit-admission-rag/
 ├── requirements.txt
 ├── README.md
 └── run.py
+
+1. Yêu cầu hệ thống
+
+    Máy tính đã cài đặt Docker Desktop hoặc Docker Engine.
+
+    Docker Compose (đã đi kèm khi cài Docker Desktop).
+
+2. Khởi chạy hệ thống (Local)
+
+Mở Terminal tại thư mục gốc của project và chạy lệnh:
+Bash
+
+docker-compose up --build
+
+Chi tiết các thành phần:
+
+    Frontend: Chạy tại http://localhost:5173
+
+    Backend API: Chạy tại http://localhost:8000
+
+    Database: Tự động khởi tạo file uit_chatbot.db trong thư mục backend/ (Dữ liệu được lưu vĩnh viễn nhờ Docker Volumes).
+
+3. Các lệnh Docker hữu ích
+
+    Dừng hệ thống: Bấm Ctrl + C hoặc chạy docker-compose down.
+
+    Chạy ngầm (Background): docker-compose up -d.
+
+    Xóa bỏ và xây dựng lại hoàn toàn: docker-compose up --build --force-recreate.

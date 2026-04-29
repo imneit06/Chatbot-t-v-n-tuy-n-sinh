@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from datetime import timedelta
 from pydantic import BaseModel
 import time
 
@@ -8,10 +9,9 @@ from app.models.chat_history import ChatHistory
 
 router = APIRouter()
 
-# Schema (Pydantic) để validate dữ liệu từ React gửi lên
 class ChatRequest(BaseModel):
     message: str
-    user_id: str = "guest"
+    user_id: str
 
 class ChatResponse(BaseModel):
     reply: str
@@ -19,10 +19,9 @@ class ChatResponse(BaseModel):
 
 @router.post("/", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
-    # 1. Giả lập delay suy nghĩ của Chatbot
-    time.sleep(1)
+    time.sleep(1) # Giả lập delay
     
-    # 2. Logic trả lời tạm thời (Sau này sẽ thay bằng gọi hàm Pipeline RAG ở đây)
+    # Logic trả lời tạm thời
     user_msg = request.message.lower()
     if "học phí" in user_msg:
         reply_text = "Học phí dự kiến của UIT năm 2026 dao động từ 30 - 50 triệu VNĐ/năm tùy chương trình đào tạo."
@@ -31,7 +30,7 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     else:
         reply_text = f"Hệ thống đang được nâng cấp để trả lời câu hỏi: '{request.message}'. Chức năng tra cứu thông minh bằng RAG sẽ sớm ra mắt!"
 
-    # 3. Lưu vào Database (Lịch sử hỏi đáp)
+    # Lưu vào Database (Lịch sử hỏi đáp) kèm theo user_id thật
     new_history = ChatHistory(
         user_id=request.user_id,
         question=request.message,
@@ -40,6 +39,25 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     )
     db.add(new_history)
     db.commit()
-    db.refresh(new_history)
 
     return ChatResponse(reply=reply_text, status="success")
+
+# --- API MỚI: LẤY LỊCH SỬ THEO USER ---
+@router.get("/history/{user_id}")
+def get_user_history(user_id: str, db: Session = Depends(get_db)):
+    histories = db.query(ChatHistory).filter(ChatHistory.user_id == user_id).order_by(ChatHistory.created_at.desc()).all()
+    
+    result = []
+    for h in histories:
+        # Cộng thêm 7 tiếng để chuyển từ giờ Quốc tế (UTC) sang giờ Việt Nam (UTC+7)
+        local_time = h.created_at + timedelta(hours=7)
+        
+        result.append({
+            "id": h.id,
+            "date": local_time.strftime("%d/%m/%Y"),
+            "time": local_time.strftime("%H:%M"), # Bây giờ giờ sẽ hiển thị chuẩn!
+            "question": h.question,
+            "answer": h.answer,
+            "status": h.status
+        })
+    return result

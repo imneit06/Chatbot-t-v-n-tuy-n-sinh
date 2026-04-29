@@ -17,3 +17,6 @@ def get_db():
         yield db
     finally:
         db.close()
+
+from app.models.user import User
+from app.models.major import Major

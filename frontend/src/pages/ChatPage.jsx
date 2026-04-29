@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Mic, Sparkles, GraduationCap, Calculator, Bot, User as UserIcon } from 'lucide-react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
+import { Send, Mic, Sparkles, GraduationCap, Calculator, Bot, User as UserIcon, Lock } from 'lucide-react';
 import axios from 'axios';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 
 const ChatPage = () => {
+  const { user } = useContext(AuthContext);
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState([]); // Chứa danh sách tin nhắn
+  const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [greetingInfo, setGreetingInfo] = useState({ text: 'buổi sáng' });
   const messagesEndRef = useRef(null);
 
-  // Xác định buổi trong ngày
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 12) setGreetingInfo({ text: 'buổi sáng' });
@@ -18,7 +20,6 @@ const ChatPage = () => {
     else setGreetingInfo({ text: 'buổi tối' });
   }, []);
 
-  // Cuộn xuống cuối khi có tin nhắn mới
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
@@ -29,35 +30,46 @@ const ChatPage = () => {
     { icon: <Sparkles className="w-4 h-4" />, text: 'Cơ hội việc làm ngành Khoa học Dữ liệu?' },
   ];
 
-  // Logic gọi API sang FastAPI
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] flex flex-col justify-center items-center relative overflow-hidden">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+        <div className="relative z-10 bg-white/60 backdrop-blur-xl p-10 rounded-[2.5rem] border border-white/50 shadow-2xl text-center max-w-md mx-4">
+          <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="w-10 h-10 text-[#003366]" />
+          </div>
+          <h2 className="text-2xl font-black text-[#003366] mb-3">Yêu cầu đăng nhập</h2>
+          <p className="text-gray-500 mb-8">Vui lòng đăng nhập để hệ thống có thể hỗ trợ và lưu trữ lịch sử tư vấn cho riêng bạn.</p>
+          <Link to="/login" className="inline-flex items-center justify-center w-full bg-[#0ea5e9] text-white font-bold py-4 rounded-2xl hover:bg-blue-600 transition-colors shadow-lg shadow-blue-500/30">
+            Đi tới trang Đăng nhập
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const handleSend = async (e, customText = null) => {
     e?.preventDefault();
     const textToSend = customText || input;
     if (!textToSend.trim()) return;
 
-    // Thêm tin nhắn của User vào giao diện ngay lập tức
     setMessages(prev => [...prev, { sender: 'user', text: textToSend }]);
     setInput('');
     setIsLoading(true);
 
     try {
-      // Gọi API sang Backend FastAPI đang chạy ở cổng 8000
       const response = await axios.post('http://localhost:8000/api/v1/chat/', {
         message: textToSend,
-        user_id: "demo_user_123" // Đổi linh hoạt nếu có auth
+        user_id: user.id.toString()
       });
-      
-      // Nhận kết quả và hiển thị
       setMessages(prev => [...prev, { sender: 'bot', text: response.data.reply }]);
     } catch (error) {
-      console.error("Lỗi gọi API:", error);
-      setMessages(prev => [...prev, { sender: 'bot', text: 'Xin lỗi, hệ thống máy chủ hiện không phản hồi. Bạn nhớ bật FastAPI lên nhé!' }]);
+      setMessages(prev => [...prev, { sender: 'bot', text: 'Xin lỗi, hệ thống máy chủ hiện không phản hồi.' }]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // --- NẾU CHƯA CÓ TIN NHẮN: HIỂN THỊ MÀN HÌNH CHÀO MỪNG (HERO UI) ---
   if (messages.length === 0) {
     return (
       <div className="relative min-h-screen bg-[#f8fafc] overflow-hidden flex flex-col justify-center items-center pt-20">
@@ -70,7 +82,7 @@ const ChatPage = () => {
               HỆ THỐNG TƯ VẤN TUYỂN SINH UIT
             </div>
             <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-4 text-gray-800">
-              Chào {greetingInfo.text}, <br/>
+              Chào {greetingInfo.text}, <span className="text-[#003366]">{user.name.split(' ').pop()}</span><br/>
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-[#003366] via-[#0ea5e9] to-[#8b5cf6] bg-[length:200%_auto] animate-gradient">
                 Bạn muốn tìm hiểu gì?
               </span>
@@ -98,7 +110,7 @@ const ChatPage = () => {
 
           <div className="flex flex-wrap justify-center gap-3">
             {suggestions.map((item, index) => (
-              <button key={index} onClick={(e) => handleSend(e, item.text)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/40 bg-white/50 backdrop-blur-md text-sm text-gray-600 hover:bg-white hover:text-[#003366] hover:-translate-y-1 transition-all">
+              <button key={index} onClick={(e) => handleSend(e, item.text)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-white/40 bg-white/50 backdrop-blur-md text-sm text-gray-600 hover:bg-white hover:text-[#003366] hover:-translate-y-1 transition-all shadow-sm">
                 <span className="text-[#0ea5e9]">{item.icon}</span>
                 {item.text}
               </button>
@@ -109,52 +121,81 @@ const ChatPage = () => {
     );
   }
 
-  // --- NẾU ĐÃ CÓ TIN NHẮN: HIỂN THỊ GIAO DIỆN CHAT TRUYỀN THỐNG ---
   return (
     <div className="flex flex-col h-screen pt-24 pb-4 bg-[#f8fafc]">
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 w-full max-w-5xl mx-auto scroll-smooth">
         <div className="space-y-6 pb-4">
-          {messages.map((msg, index) => (
-            <div key={index} className={`flex gap-4 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-              <div className="flex-shrink-0">
-                {msg.sender === 'bot' ? (
-                  <div className="w-10 h-10 bg-gradient-to-br from-[#003366] to-[#0ea5e9] rounded-full flex items-center justify-center shadow-sm">
-                    <Bot className="w-6 h-6 text-white" />
-                  </div>
-                ) : (
-                  <div className="w-10 h-10 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm">
-                    <UserIcon className="w-6 h-6 text-gray-500" />
-                  </div>
-                )}
-              </div>
-              <div className={`max-w-[80%] md:max-w-[70%] rounded-2xl px-5 py-3.5 text-[15px] leading-relaxed shadow-sm ${
-                msg.sender === 'user' ? 'bg-[#003366] text-white rounded-tr-sm' : 'bg-white text-gray-800 border border-gray-100 rounded-tl-sm'
-              }`}>
-                <p className="whitespace-pre-wrap">{msg.text}</p>
-              </div>
-            </div>
-          ))}
-
-          {/* Hiệu ứng Bot đang gõ chữ */}
-          {isLoading && (
-            <div className="flex gap-4 flex-row">
-              <div className="flex-shrink-0">
-                <div className="w-10 h-10 bg-gradient-to-br from-[#003366] to-[#0ea5e9] rounded-full flex items-center justify-center shadow-sm">
-                  <Bot className="w-6 h-6 text-white" />
+          <AnimatePresence>
+            {messages.map((msg, index) => (
+              <motion.div 
+                key={index}
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.4, type: "spring", bounce: 0.3 }}
+                className={`flex gap-4 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+              >
+                <div className="flex-shrink-0">
+                  {msg.sender === 'bot' ? (
+                    <div className="w-10 h-10 bg-gradient-to-br from-[#003366] to-[#0ea5e9] rounded-full flex items-center justify-center shadow-md">
+                      <Bot className="w-6 h-6 text-white" />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm">
+                      <UserIcon className="w-6 h-6 text-gray-500" />
+                    </div>
+                  )}
                 </div>
+                <div className={`max-w-[80%] md:max-w-[70%] rounded-2xl px-5 py-3.5 text-[15px] leading-relaxed shadow-sm ${
+                  msg.sender === 'user' 
+                    ? 'bg-[#003366] text-white rounded-tr-sm' 
+                    : 'bg-white text-gray-800 border border-gray-100 rounded-tl-sm shadow-[0_4px_20px_rgb(0,0,0,0.04)]'
+                }`}>
+                  <p className="whitespace-pre-wrap">{msg.text}</p>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          {/* HIỆU ỨNG BOT ĐANG SUY NGHĨ (TYPING INDICATOR) */}
+          {isLoading && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="flex gap-4 flex-row"
+            >
+              <div className="flex-shrink-0">
+                <motion.div 
+                  animate={{ rotate: [0, 10, -10, 0] }}
+                  transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                  className="w-10 h-10 bg-gradient-to-br from-[#003366] to-[#0ea5e9] rounded-full flex items-center justify-center shadow-md shadow-blue-500/20"
+                >
+                  <Bot className="w-6 h-6 text-white" />
+                </motion.div>
               </div>
-              <div className="bg-white border border-gray-100 rounded-2xl rounded-tl-sm px-5 py-4 shadow-sm flex items-center gap-1">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+              <div className="bg-white border border-gray-100 rounded-2xl rounded-tl-sm px-5 py-4 shadow-sm flex items-center gap-1.5">
+                <motion.div 
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }} 
+                  transition={{ repeat: Infinity, duration: 1, delay: 0 }} 
+                  className="w-2 h-2 bg-[#0ea5e9] rounded-full" 
+                />
+                <motion.div 
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }} 
+                  transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} 
+                  className="w-2 h-2 bg-[#0ea5e9] rounded-full" 
+                />
+                <motion.div 
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }} 
+                  transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} 
+                  className="w-2 h-2 bg-[#0ea5e9] rounded-full" 
+                />
               </div>
-            </div>
+            </motion.div>
           )}
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Khung nhập liệu thu nhỏ ở dưới cùng */}
       <div className="w-full max-w-5xl mx-auto px-4 mt-2">
         <form onSubmit={handleSend} className="bg-white border border-gray-200 shadow-sm rounded-full p-2 flex items-center gap-3 focus-within:border-[#0ea5e9] transition-colors">
           <input
@@ -164,10 +205,10 @@ const ChatPage = () => {
             placeholder="Bạn cần hỏi thêm gì không?"
             className="flex-1 bg-transparent border-none focus:ring-0 px-4 py-2 outline-none"
           />
-          <button type="button" className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
+          <button type="button" className="p-2 text-gray-400 hover:text-[#0ea5e9] transition-colors">
             <Mic className="w-5 h-5" />
           </button>
-          <button type="submit" disabled={!input.trim()} className="p-3 bg-[#0ea5e9] text-white rounded-full hover:bg-blue-600 disabled:opacity-50 transition-colors">
+          <button type="submit" disabled={!input.trim() || isLoading} className="p-3 bg-[#0ea5e9] text-white rounded-full hover:bg-blue-600 disabled:opacity-50 transition-colors shadow-md">
             <Send className="w-4 h-4" />
           </button>
         </form>

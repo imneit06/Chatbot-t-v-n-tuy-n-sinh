@@ -24,14 +24,16 @@ const LoginPage = () => {
       // Logic Đăng nhập
       try {
         const response = await axios.post('http://localhost:8000/api/v1/auth/login', {
-          email,
-          password
+          email, password
         });
-        login(response.data);
+        // Response trả về có dạng { access_token: "...", user: {...} }
+        login(response.data.user); // Lưu thông tin user vào Context
+        localStorage.setItem('uit_token', response.data.access_token);
         if(response.data.role === 'admin') navigate('/admin');
         else navigate('/chat');
       } catch (err) {
-        setError('Email hoặc mật khẩu không chính xác!');
+        const errorMessage = err.response?.data?.detail || 'Email hoặc mật khẩu không chính xác!';
+        setError(errorMessage);
       }
     } else {
       // Logic Đăng ký (Tạm thời giả lập báo lỗi để bạn nối API sau)
@@ -39,7 +41,16 @@ const LoginPage = () => {
         setError('Mật khẩu xác nhận không khớp!');
         return;
       }
-      setError('Chức năng đăng ký đang được bảo trì!');
+      try {
+        const regResponse = await axios.post('http://localhost:8000/api/v1/auth/register', {
+          name, email, password
+        });
+        login(regResponse.data.user);
+        localStorage.setItem('uit_token', regResponse.data.access_token);
+        navigate('/chat');
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Lỗi đăng ký, vui lòng thử lại!');
+      }
     }
   };
 
@@ -153,13 +164,17 @@ const LoginPage = () => {
               </button>
             </motion.form>
           </AnimatePresence>
-
           <div className="mt-8 text-center text-sm text-blue-100">
             {isLogin ? 'Chưa có tài khoản? ' : 'Đã có tài khoản? '}
             <button 
               onClick={() => {
-                setIsLogin(!isLogin);
+                setIsLogin(!isLogin); // Lật trạng thái Đăng nhập/Đăng ký
+                // Reset toàn bộ các ô nhập liệu và thông báo lỗi
                 setError('');
+                setEmail('');
+                setPassword('');
+                setName('');
+                setConfirmPassword('');
               }}
               className="text-white font-bold hover:underline"
             >
