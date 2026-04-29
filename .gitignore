@@ -35,4 +35,5 @@ env/
 .env
 .DS_Store
 .ipynb_checkpoints/
-data/*
+data/eval
+data/raw/*
