@@ -35,6 +35,7 @@ env/
 .env
 .DS_Store
 .ipynb_checkpoints/
-data/eval
+data/eval*
 data/raw/*
-.env
+storage/chroma/
+storage/*.pkl

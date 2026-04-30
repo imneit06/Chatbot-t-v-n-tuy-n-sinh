@@ -20,6 +20,7 @@ from app.core.config import (
     RETRIEVAL_TOP_K,
 )
 
+from app.search.bm25_index import get_bm25_indexer
 
 ID_KEY = "doc_id"
 
@@ -258,36 +259,86 @@ def merge_doc_groups_round_robin(doc_groups):
     return merged_docs
 
 
+def retrieve_with_bm25(question: str, k: int = 20) -> list[str]:
+    indexer = get_bm25_indexer()
+    results = indexer.search(question, top_k=k)
+    return [doc_id for doc_id, _ in results if doc_id]
+
+
+def reciprocal_rank_fusion(
+    ranked_lists: list[list[tuple[str, float]]],
+    k: int = 60,
+) -> list[tuple[str, float]]:
+    rrf_scores: dict[str, float] = {}
+    for ranked_list in ranked_lists:
+        for rank, (doc_id, _) in enumerate(ranked_list, start=1):
+            if not doc_id:
+                continue
+            rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + 1.0 / (k + rank)
+    return sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+
+
+def _fuse_docs_by_rrf(
+    doc_groups: list[list],
+    top_k: int,
+) -> list:
+    rrf_scores: dict[str, tuple[float, object]] = {}
+    for group in doc_groups:
+        for rank, doc in enumerate(group, start=1):
+            key = _doc_dedup_key(doc)
+            if not key:
+                continue
+            if key not in rrf_scores:
+                rrf_scores[key] = (0.0, doc)
+            old_score, _ = rrf_scores[key]
+            rrf_scores[key] = (old_score + 1.0 / (60 + rank), doc)
+    sorted_items = sorted(rrf_scores.items(), key=lambda x: x[1][0], reverse=True)
+    return [doc for _, (_, doc) in sorted_items[:top_k]]
+    
+
 def retrieve_docs(question: str, k: int = RETRIEVAL_TOP_K):
     plans = plan_queries(question)
-
     candidate_k = max(k * 2, 10)
-    doc_groups = []
+    plan_doc_groups = []
 
     for plan in plans:
         plan_filter = metadata_filter_from_plan(plan)
 
-        retriever = build_retriever(
-            metadata_filter=plan_filter,
-            k=candidate_k,
-        )
+        # Chroma vector search
+        chroma_retriever = build_retriever(metadata_filter=plan_filter, k=candidate_k)
+        chroma_docs = chroma_retriever.invoke(plan["query"])
 
-        docs = retriever.invoke(plan["query"])
-        doc_groups.append(docs)
+        # BM25 keyword search
+        bm25_raw = retrieve_with_bm25(plan["query"], k=candidate_k)
+        docstore = load_parent_docstore()
+        bm25_docs = []
+        for doc_id in bm25_raw:
+            doc = docstore.mget([doc_id])
+            if doc and doc[0]:
+                bm25_docs.append(doc[0])
 
-    broad_retriever = build_retriever(
-        metadata_filter=None,
-        k=candidate_k,
-    )
-    broad_docs = broad_retriever.invoke(question)
-    doc_groups.append(broad_docs)
+        # RRF fusion: merge chroma + bm25
+        fused = _fuse_docs_by_rrf([chroma_docs, bm25_docs], top_k=candidate_k)
+        plan_doc_groups.append(fused)
 
-    merged_docs = merge_doc_groups_round_robin(doc_groups)
+    # Broad retrieval (no doc_type filter)
+    chroma_broad = build_retriever(metadata_filter=None, k=candidate_k).invoke(question)
+    bm25_broad_raw = retrieve_with_bm25(question, k=candidate_k)
+    docstore = load_parent_docstore()
+    bm25_broad_docs = []
+    for doc_id in bm25_broad_raw:
+        doc = docstore.mget([doc_id])
+        if doc and doc[0]:
+            bm25_broad_docs.append(doc[0])
+    broad_fused = _fuse_docs_by_rrf([chroma_broad, bm25_broad_docs], top_k=candidate_k)
+    plan_doc_groups.append(broad_fused)
 
-    return merged_docs[:k], {
+    # Final RRF fusion across all groups
+    merged_docs = _fuse_docs_by_rrf(plan_doc_groups, top_k=k)
+
+    return merged_docs, {
         "plans": plans,
     }
-
 
 def _clean_meta_value(value):
     if value is None:
