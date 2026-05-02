@@ -18,8 +18,10 @@ from app.core.config import (
     EMBEDDING_DEVICE,
     NORMALIZE_EMBEDDINGS,
     RETRIEVAL_TOP_K,
+    RERANKER_ENABLED,
 )
 
+from app.rag.reranker import rerank
 from app.search.bm25_index import get_bm25_indexer
 
 # Module-level singletons
@@ -286,9 +288,9 @@ def merge_doc_groups_round_robin(doc_groups):
     return merged_docs
 
 
-def retrieve_with_bm25(question: str, k: int = 20) -> list[str]:
+def retrieve_with_bm25(question: str, k: int = 20, doc_type: str = None) -> list[str]:
     indexer = get_bm25_indexer()
-    results = indexer.search(question, top_k=k)
+    results = indexer.search(question, top_k=k, doc_type=doc_type)
     return [doc_id for doc_id, _ in results if doc_id]
 
 
@@ -332,11 +334,12 @@ def retrieve_docs(question: str, k: int = RETRIEVAL_TOP_K):
         plan_filter = metadata_filter_from_plan(plan)
 
         # Chroma vector search
+        plan_doc_type = plan.get("doc_type")
         chroma_retriever = build_retriever(metadata_filter=plan_filter, k=candidate_k)
         chroma_docs = chroma_retriever.invoke(plan["query"])
 
-        # BM25 keyword search
-        bm25_raw = retrieve_with_bm25(plan["query"], k=candidate_k)
+        # BM25 keyword search (filtered by doc_type)
+        bm25_raw = retrieve_with_bm25(plan["query"], k=candidate_k, doc_type=plan_doc_type)
         docstore = get_docstore()
         bm25_docs = []
         for doc_id in bm25_raw:
@@ -360,12 +363,14 @@ def retrieve_docs(question: str, k: int = RETRIEVAL_TOP_K):
     broad_fused = _fuse_docs_by_rrf([chroma_broad, bm25_broad_docs], top_k=candidate_k)
     plan_doc_groups.append(broad_fused)
 
-    # Final RRF fusion across all groups
-    merged_docs = _fuse_docs_by_rrf(plan_doc_groups, top_k=k)
-
-    return merged_docs, {
-        "plans": plans,
-    }
+    candidate_k = max(k * 2, 10)
+    candidates = _fuse_docs_by_rrf(plan_doc_groups, top_k=candidate_k)
+    if RERANKER_ENABLED:
+        merged_docs = rerank(question, candidates, top_k=k)
+    else:
+        merged_docs = candidates[:k]
+    return merged_docs, {"plans": plans}
+    
 
 def _clean_meta_value(value):
     if value is None:

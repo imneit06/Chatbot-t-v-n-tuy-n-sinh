@@ -17,6 +17,7 @@ class BM25Indexer:
         self.corpus: list[list[str]] = []
         self.chunk_ids: list[str] = []
         self.parent_ids: list[str] = []
+        self.doc_types: list[str] = []
         self._load_or_build()
 
     def _tokenize(self, text: str) -> list[str]:
@@ -35,6 +36,7 @@ class BM25Indexer:
         self.corpus = data["corpus"]
         self.chunk_ids = data["chunk_ids"]
         self.parent_ids = data.get("parent_ids", [])
+        self.doc_types = data.get("doc_types", [])
 
     def build(self, children_file: str = None):
         if children_file is None:
@@ -44,6 +46,7 @@ class BM25Indexer:
         self.corpus = [self._tokenize(chunk["page_content"]) for chunk in chunks]
         self.chunk_ids = [chunk["metadata"]["doc_id"] for chunk in chunks]
         self.parent_ids = [chunk["metadata"]["doc_id"] for chunk in chunks]
+        self.doc_types = [chunk["metadata"].get("doc_type") for chunk in chunks]
         self.index = BM25Okapi(self.corpus)
         self.save()
 
@@ -55,9 +58,10 @@ class BM25Indexer:
                 "corpus": self.corpus,
                 "chunk_ids": self.chunk_ids,
                 "parent_ids": self.parent_ids,
+                "doc_types": self.doc_types,
             }, f)
 
-    def search(self, query: str, top_k: int = 20) -> list[tuple[str, float]]:
+    def search(self, query: str, top_k: int = 20, doc_type: str = None) -> list[tuple[str, float]]:
         if self.index is None:
             return []
 
@@ -66,8 +70,10 @@ class BM25Indexer:
 
         # Group by parent_id, keep max score
         parent_best: dict[str, float] = {}
-        for parent_id, score in zip(self.parent_ids, raw_scores):
+        for parent_id, score, dt in zip(self.parent_ids, raw_scores, self.doc_types):
             if not parent_id:
+                continue
+            if doc_type is not None and dt != doc_type:
                 continue
             if parent_id not in parent_best or score > parent_best[parent_id]:
                 parent_best[parent_id] = score

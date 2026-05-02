@@ -99,6 +99,11 @@ CHUNK_MAX_TOKENS = get_int("CHUNK_MAX_TOKENS", 512)  # ~512 tokens ≈ 700-1000 
 RETRIEVAL_TOP_K = get_int("RETRIEVAL_TOP_K", 5)
 DEBUG_TOP_K = get_int("DEBUG_TOP_K", 8)
 
+# Reranker
+RERANKER_ENABLED = get_bool("RERANKER_ENABLED", False)
+RERANKER_MODEL = get_env("RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")
+RERANKER_TOP_K = get_int("RERANKER_TOP_K", 5)
+
 # Memory
 MEMORY_DIR = get_path("MEMORY_DIR", "storage/memory")
 MEMORY_MAX_RECENT_TURNS = get_int("MEMORY_MAX_RECENT_TURNS", 4)
